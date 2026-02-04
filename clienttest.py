@@ -68,40 +68,66 @@ class LabyrintheApp(ctk.CTk):
                 return True
             except: return False
         return True
-    def afficher_fin(self, winners):
-        self.nettoyer()
-        ctk.CTkLabel(self, text="FIN DE PARTIE", font=("Impact", 50), text_color="#00FF00").pack(pady=50)
-        ctk.CTkLabel(self, text="Gagnants :", font=("Arial", 30)).pack(pady=20)
-        for w in winners:
-            ctk.CTkLabel(self, text=w, font=("Arial", 25)).pack()
-        ctk.CTkButton(self, text="Retour au menu", command=self.menu_principal).pack(pady=40)
-
+    
     def ecouter(self):
-        while True:
-            try:
-                data = self.client_socket.recv(4096).decode('utf-8')
-                if not data: break
-                msg = json.loads(data)
-                if msg["type"] == "update_attente":
-                    self.after(0, lambda: self.label_attente.configure(text="SQUAD :\n" + "\n".join(msg["joueurs"])))
-                elif msg["type"] == "start_game":
-                    self.after(0, lambda: self.interface_jeu(msg))
-                elif msg["type"] == "update_game":
-                    self.after(0, lambda: self.dessiner_plateau(msg["etat"]))
-                elif msg["type"] == "liste_salles":
-                    self.after(0, lambda: self.afficher_liste_salles(msg["salles"]))
-                elif msg["type"] == "waiting":
-                    self.after(0, lambda: self.stat_lab.configure(text=msg["message"]))
-                elif msg["type"] == "end_game":
-                    self.after(0, lambda:self.afficher_fin(msg["winners"]))
-                elif msg["type"] == "winner_message":
-                    self.after(0, lambda: self.afficher_winner(msg["message"]))
+            while True:
+                try:
+                    data = self.client_socket.recv(4096).decode('utf-8')
+                    if not data: break
+                    msg = json.loads(data)
+                    
+                    if msg["type"] == "update_attente":
+                        self.after(0, lambda: self.label_attente.configure(text="SQUAD :\n" + "\n".join(msg["joueurs"])))
+                    elif msg["type"] == "start_game":
+                        self.after(0, lambda: self.interface_jeu(msg))
+                    elif msg["type"] == "update_game":
+                        self.after(0, lambda: self.dessiner_plateau(msg["etat"]))
+                    elif msg["type"] == "liste_salles":
+                        self.after(0, lambda: self.afficher_liste_salles(msg["salles"]))
+                    elif msg["type"] == "end_game":
+                        # On récupère la liste, si elle n'existe pas on met une liste vide
+                        w = msg.get("winners", [])
+                        self.after(0, lambda: self.afficher_fin(w))
+                    elif msg["type"] == "winner_message":
+                        self.after(0, lambda: self.afficher_winner(msg["message"]))
+                except: break
+    def afficher_fin(self, winners):
+            self.nettoyer()
+            
+            # Titre stylé
+            ctk.CTkLabel(self, text="🏆 PODIUM FINAL 🏆", font=("Impact", 60), text_color="#FFD700").pack(pady=30)
 
-            except: break
-    def afficher_winner(self, message):
-        self.nettoyer()
-        ctk.CTkLabel(self, text=message, font=("Impact", 40), text_color="#00FF00").pack(pady=50)
-        ctk.CTkLabel(self, text="En attente des autres joueurs...", font=("Arial", 25)).pack(pady=20)
+            # Affichage du classement
+            frame_podium = ctk.CTkFrame(self, fg_color="transparent")
+            frame_podium.pack(pady=20)
+
+            for i, avatar in enumerate(winners):
+                rang = "1er" if i == 0 else f"{i+1}ème"
+                color = "#FFD700" if i == 0 else "#C0C0C0" if i == 1 else "#CD7F32" if i == 2 else "white"
+                
+                lbl = ctk.CTkLabel(frame_podium, 
+                                text=f"{rang} : {avatar}", 
+                                font=("Arial", 30, "bold"), 
+                                text_color=color)
+                lbl.pack(pady=5)
+
+            # --- BOUTONS DE FIN ---
+            btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+            btn_frame.pack(pady=40)
+
+            # Bouton 1 : Recommencer (Retour au choix du terrain)
+            ctk.CTkButton(btn_frame, 
+                        text="CHANGER DE TERRAIN", 
+                        command=self.choisir_terrain_screen, 
+                        width=250, height=50, 
+                        fg_color="#1f538d").grid(row=0, column=0, padx=20)
+
+            # Bouton 2 : Menu Principal
+            ctk.CTkButton(btn_frame, 
+                        text="MENU PRINCIPAL", 
+                        command=self.menu_principal, 
+                        width=250, height=50, 
+                        fg_color="gray").grid(row=0, column=1, padx=20)
 
     # --- ÉCRANS ---
     def choisir_avatar_screen(self):
@@ -163,33 +189,33 @@ class LabyrintheApp(ctk.CTk):
         self.label_attente = ctk.CTkLabel(self, text="Attente des joueurs...", font=("Impact", 30))
         self.label_attente.pack(pady=100)
         ctk.CTkButton(self, text="LANCER LE JEU", command=lambda: self.client_socket.send(json.dumps({"type":"lancer_jeu"}).encode())).pack()
-
     def interface_jeu(self, data):
-        self.nettoyer()
-        self.current_map = data["map"]
-        self.ma_salle = data["ma_salle"]
-        self.bind("<Up>", lambda e: self.move("up"))
-        self.bind("<Down>", lambda e: self.move("down"))
-        self.bind("<Left>", lambda e: self.move("left"))
-        self.bind("<Right>", lambda e: self.move("right"))
+            self.nettoyer()
+            self.current_map = data["map"]
+            self.ma_salle = data["ma_salle"]
+            
+            # --- AJOUT ICI : Création du label pour les mouvements ---
+            self.stat_lab = ctk.CTkLabel(self, text="MOUVEMENTS : 0", font=("Impact", 25), text_color="#00E5FF")
+            self.stat_lab.pack(pady=10)
 
-        
-        # UI
-        
-        self.can = ctk.CTkCanvas(self, width=1000, height=1000, bg="black", highlightthickness=2, highlightbackground="#00E5FF")
-        self.can.pack(pady=50)
-        
-        ctrl = ctk.CTkFrame(self, fg_color="transparent")
-        ctrl.pack()
-        
-        move_f = ctk.CTkFrame(ctrl, fg_color="transparent")
-        move_f.grid(row=0, column=1)
+            self.bind("<Up>", lambda e: self.move("up"))
+            self.bind("<Down>", lambda e: self.move("down"))
+            self.bind("<Left>", lambda e: self.move("left"))
+            self.bind("<Right>", lambda e: self.move("right"))
+
+            self.can = ctk.CTkCanvas(self, width=800, height=500, bg="black", highlightthickness=2, highlightbackground="#00E5FF")
+            self.can.pack(pady=20)
+            
+            ctrl = ctk.CTkFrame(self, fg_color="transparent")
+            ctrl.pack()
 
     def move(self, d):
         self.client_socket.send(json.dumps({"type":"move", "dir":d, "salle":self.ma_salle}).encode())
         self.points_mouvement = random.randint(1,6)
         self.stat_lab.configure(text=f"MOUVEMENTS : {self.points_mouvement}")
-
+    def afficher_winner(self, message):
+            if hasattr(self, 'stat_lab'):
+                self.stat_lab.configure(text=message, text_color="#FFD700")
     def dessiner_plateau(self, etat):
         self.can.delete("all")
         rows, cols = len(self.current_map), len(self.current_map[0])
@@ -216,6 +242,12 @@ class LabyrintheApp(ctk.CTk):
                         color = "orange"
                     elif v == 5:    # ronces
                         color = "darkgreen"
+                    elif v == 6:    # ronces
+                        color = "#140777"
+                    elif v == 7:    # ronces
+                        color = "#009407"
+                    elif v == 8:    # ronces
+                        color = "#340295"
                     else:
                         color = "#050505"
 
@@ -231,7 +263,12 @@ class LabyrintheApp(ctk.CTk):
                         self.can.create_text(x+cs/2, y+cs/2, text="🔥")
                     elif v == 5:
                         self.can.create_text(x+cs/2, y+cs/2, text="🌵")
-
+                    elif v == 6:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🥶")
+                    elif v == 7:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🌲")
+                    elif v == 8:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🌀")
         # Dessiner les avatars des joueurs
         for info in etat.values():
             y, x = info["pos"]

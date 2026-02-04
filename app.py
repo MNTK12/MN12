@@ -1,151 +1,279 @@
 import customtkinter as ctk
 from PIL import Image
-import pygame
-import os
-import socket
-import threading
+import socket, threading, json, os, random, pygame
 
 class LabyrintheApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Labyrinthe Multijoueur")
-        self.geometry("900x700")
-
-        # --- RÉSEAU ---
+        self.geometry("1000x850")
+        self.title("Labyrinthe Online - Sync Edition")
+        
+        self.mon_id = None
+        self.avatar_choisi = "👤"
         self.client_socket = None
-        self.terrain_choisi = ""
-
-        # --- AUDIO ---
-        pygame.mixer.init()
+        self.current_map = []
+        self.points_mouvement = 0
+        self.is_moving = False
         self.is_muted = False
-        self.load_audio()
         
-        # --- INITIALISATION VISUELLE ---
+        pygame.mixer.init()
+        self.load_resources()
         self.setup_background()
-        
-        self.btn_style = {
-            "width": 320, "height": 60, "font": ("Segoe UI", 20, "bold"), 
-            "corner_radius": 15, "border_width": 2, "border_color": "#00E5FF", 
-            "fg_color": "#1A1A1A", "hover_color": "#00B8D4"
-        }
-        self.btn2_style = {
-            "width": 320, "height": 260, "font": ("Segoe UI", 20, "bold"), 
-            "corner_radius": 15, "border_width": 2, "border_color": "#00E5FF", 
-            "fg_color": "#1A1A1A", "hover_color": "#00B8D4",
-            "compound": "top"
-        }
+        self.bind("<Configure>", self.redimensionner_fond)
+        self.choisir_avatar_screen()
 
-        self.setup_menu()
-        self.bind("<Configure>", self.redimensionner_image)
-        
-        # Lancement automatique de la musique
-        self.play_music()
-
-    def load_audio(self):
-        """Charge les fichiers audio et les icônes du haut-parleur"""
+    def load_resources(self):
         try:
-            # Musique de fond
-            pygame.mixer.music.load(os.path.join("audio", "games.mp3"))
-            pygame.mixer.music.set_volume(0.5)
-            # Effet sonore
-            self.click_sound = pygame.mixer.Sound(os.path.join("audio", "effet.wav"))
-            
-            # Icônes pour le bouton Muet
-            img_on = Image.open(os.path.join("image", "of.png"))
-            img_off = Image.open(os.path.join("image", "on.png"))
-            self.icon_on = ctk.CTkImage(img_on,size=(20, 20))
-            self.icon_off = ctk.CTkImage(img_off,size=(20, 20))
-        except:
-            print("Erreur : Fichiers audio ou icônes manquants.")
-            self.icon_on = self.icon_off = True
-
-    def toggle_mute(self):
-        """Bascule entre mode muet et actif"""
-        self.is_muted = not self.is_muted
-        if self.is_muted:
-            pygame.mixer.music.pause()
-            self.mute_btn.configure(image=self.icon_off)
-        else:
-            pygame.mixer.music.unpause()
-            self.mute_btn.configure(image=self.icon_on)
-
-    def play_music(self):
-        if not self.is_muted:
+            pygame.mixer.music.load("audio/games.mp3")
+            pygame.mixer.music.set_volume(0.4)
             pygame.mixer.music.play(-1)
-
-    def play_click(self):
-        if not self.is_muted and hasattr(self, 'click_sound'):
-            self.click_sound.play()
+            self.icon_on = ctk.CTkImage(Image.open("image/of.png"), size=(25, 25))
+            self.icon_off = ctk.CTkImage(Image.open("image/on.png"), size=(25, 25))
+        except: pass
 
     def setup_background(self):
         try:
-            path = os.path.join("image", "femme.jpg")
-            self.pil_img = Image.open(path).convert("RGB")
-            self.bg_image = ctk.CTkImage(light_image=self.pil_img, dark_image=self.pil_img, size=(900, 700))
-            self.bg_label = ctk.CTkLabel(self, image=self.bg_image, text="")
+            self.bg_raw = Image.open("image/femme.jpg")
+            self.bg_img = ctk.CTkImage(self.bg_raw, size=(1000, 850))
+            self.bg_label = ctk.CTkLabel(self, image=self.bg_img, text="")
             self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
             self.bg_label.lower()
         except: pass
 
-    def redimensionner_image(self, event):
+    def redimensionner_fond(self, event):
         if event.widget == self:
-            self.bg_image.configure(size=(event.width, event.height))
+            try: self.bg_img.configure(size=(event.width, event.height))
+            except: pass
 
-    def nettoyer_ecran(self):
-        for widget in self.winfo_children():
-            if widget != getattr(self, "bg_label", None) and widget != getattr(self, "mute_btn", None):
-                widget.destroy()
-        
-        # Recréation/Repositionnement du bouton muet pour qu'il reste au premier plan
+    def nettoyer(self):
+        for w in self.winfo_children():
+            if w != getattr(self, "bg_label", None): w.destroy()
         self.mute_btn = ctk.CTkButton(self, text="", image=self.icon_on if not self.is_muted else self.icon_off, 
-                                      width=40, height=40, fg_color="transparent", hover_color="#333",
-                                      command=self.toggle_mute)
-        self.mute_btn.place(relx=0.95, rely=0.05, anchor="center")
-        self.after(10, self.bg_label.lower)
+                                      width=40, height=40, fg_color="transparent", command=self.toggle_mute)
+        self.mute_btn.place(relx=0.96, rely=0.04, anchor="center")
 
-    def setup_menu(self):
-        self.nettoyer_ecran()
-        ctk.CTkLabel(self, text="L A B Y R I N T H E", font=("Impact", 80), text_color="#00E5FF", fg_color="transparent").place(relx=0.5, rely=0.2, anchor="center")
-        
-        ctk.CTkButton(self, text="CRÉER UNE SALLE", command=lambda: [self.play_click(), self.show_terrain_choice()], **self.btn_style).place(relx=0.5, rely=0.5, anchor="center")
-        ctk.CTkButton(self, text="SE CONNECTER", command=self.play_click, **self.btn_style).place(relx=0.5, rely=0.65, anchor="center")
+    def toggle_mute(self):
+        self.is_muted = not self.is_muted
+        if self.is_muted: pygame.mixer.music.pause()
+        else: pygame.mixer.music.unpause()
+        self.mute_btn.configure(image=self.icon_on if not self.is_muted else self.icon_off)
 
-    def show_terrain_choice(self):
-        self.nettoyer_ecran()
-        ctk.CTkLabel(self, text="CHOISISSEZ VOTRE TERRAIN", font=("Impact", 35, "bold"), text_color="white").place(relx=0.5, rely=0.15, anchor="center")
-        
-        # Chargement images terrains
-        try:
-            img1 = ctk.CTkImage(Image.open("image/glace.jpg"), size=(300, 200))
-            img2 = ctk.CTkImage(Image.open("image/foret.jpeg"), size=(300, 200))
-            img3 = ctk.CTkImage(Image.open("image/feu.jpg"), size=(300, 200))
-        except: img1 = img2 = img3 = None
+    def connecter(self):
+        if not self.client_socket:
+            try:
+                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client_socket.connect(('127.0.0.1', 5555))
+                self.mon_id = f"J_{self.client_socket.getsockname()[1]}"
+                threading.Thread(target=self.ecouter, daemon=True).start()
+                return True
+            except: return False
+        return True
+    
+    def ecouter(self):
+            while True:
+                try:
+                    data = self.client_socket.recv(4096).decode('utf-8')
+                    if not data: break
+                    msg = json.loads(data)
+                    
+                    if msg["type"] == "update_attente":
+                        self.after(0, lambda: self.label_attente.configure(text="SQUAD :\n" + "\n".join(msg["joueurs"])))
+                    elif msg["type"] == "start_game":
+                        self.after(0, lambda: self.interface_jeu(msg))
+                    elif msg["type"] == "update_game":
+                        self.after(0, lambda: self.dessiner_plateau(msg["etat"]))
+                    elif msg["type"] == "liste_salles":
+                        self.after(0, lambda: self.afficher_liste_salles(msg["salles"]))
+                    elif msg["type"] == "end_game":
+                        # On récupère la liste, si elle n'existe pas on met une liste vide
+                        w = msg.get("winners", [])
+                        self.after(0, lambda: self.afficher_fin(w))
+                    elif msg["type"] == "winner_message":
+                        self.after(0, lambda: self.afficher_winner(msg["message"]))
+                except: break
+    def afficher_fin(self, winners):
+            self.nettoyer()
+            
+            # Titre stylé
+            ctk.CTkLabel(self, text="🏆 PODIUM FINAL 🏆", font=("Impact", 60), text_color="#FFD700").pack(pady=30)
 
-        terrains = [("Donjon de Glace", img1), ("Forêt Maudite", img2), ("Labyrinthe de Feu", img3)]
-        
-        for i, (t, img) in enumerate(terrains):
-            ctk.CTkButton(self, text=t, image=img, command=lambda name=t: [self.play_click(), self.connect_to_server(name)], **self.btn2_style).place(rely=0.45, relx=0.15 + (i*0.35), anchor="center")
-        
-        ctk.CTkButton(self, text="← Retour", font=("arial", 15, "bold"), command=lambda: [self.play_click(), self.setup_menu()], width=100, fg_color="transparent").place(relx=0.05, rely=0.05)
+            # Affichage du classement
+            frame_podium = ctk.CTkFrame(self, fg_color="transparent")
+            frame_podium.pack(pady=20)
 
-    def connect_to_server(self, terrain_name):
-        self.terrain_choisi = terrain_name
-        # Logique réseau...
-        self.show_waiting_room()
+            for i, avatar in enumerate(winners):
+                rang = "1er" if i == 0 else f"{i+1}ème"
+                color = "#FFD700" if i == 0 else "#C0C0C0" if i == 1 else "#CD7F32" if i == 2 else "white"
+                
+                lbl = ctk.CTkLabel(frame_podium, 
+                                text=f"{rang} : {avatar}", 
+                                font=("Arial", 30, "bold"), 
+                                text_color=color)
+                lbl.pack(pady=5)
 
-    def show_waiting_room(self):
-        self.nettoyer_ecran()
-        ctk.CTkLabel(self, text=f"TERRAIN : {self.terrain_choisi}", font=("Segoe UI", 35, "bold"), text_color="#00E5FF").place(relx=0.5, rely=0.1, anchor="center")
-        
-        self.list_frame = ctk.CTkFrame(self, fg_color="#1A1A1A", border_width=2, border_color="#00E5FF", width=450, height=350)
-        self.list_frame.place(relx=0.5, rely=0.5, anchor="center")
-        self.list_frame.pack_propagate(False)
-        
-        ctk.CTkLabel(self.list_frame, text="JOUEURS DANS LA SALLE", font=("Segoe UI", 20, "bold"), text_color="#00E5FF").pack(pady=15)
-        self.players_label = ctk.CTkLabel(self.list_frame, text="Attente...", font=("Consolas", 18), text_color="white")
-        self.players_label.pack(pady=10)
+            # --- BOUTONS DE FIN ---
+            btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+            btn_frame.pack(pady=40)
 
-        ctk.CTkButton(self, text="LANCER LA PARTIE", fg_color="#27ae60", hover_color="#2ecc71", width=250, height=50, font=("Segoe UI", 20, "bold"), command=self.play_click).place(relx=0.5, rely=0.85, anchor="center")
+            # Bouton 1 : Recommencer (Retour au choix du terrain)
+            ctk.CTkButton(btn_frame, 
+                        text="CHANGER DE TERRAIN", 
+                        command=self.choisir_terrain_screen, 
+                        width=250, height=50, 
+                        fg_color="#1f538d").grid(row=0, column=0, padx=20)
+
+            # Bouton 2 : Menu Principal
+            ctk.CTkButton(btn_frame, 
+                        text="MENU PRINCIPAL", 
+                        command=self.menu_principal, 
+                        width=250, height=50, 
+                        fg_color="gray").grid(row=0, column=1, padx=20)
+
+    # --- ÉCRANS ---
+    def choisir_avatar_screen(self):
+        self.nettoyer()
+        ctk.CTkLabel(self, text="SÉLECTIONNE TON AVATAR", font=("Impact", 45), text_color="#00E5FF").pack(pady=50)
+        f = ctk.CTkFrame(self, fg_color="transparent")
+        f.pack()
+        avatars = ["🥷", "🤖", "🧙‍♂️", "🧛‍♂️", "🦁", "👻", "🧟", "👽"]
+        for i, e in enumerate(avatars):
+            ctk.CTkButton(f, text=e, width=90, height=90, font=("Arial", 40), command=lambda a=e: self.valider_avatar(a)).grid(row=i//4, column=i%4, padx=10, pady=10)
+
+    def valider_avatar(self, a):
+        self.avatar_choisi = a
+        self.menu_principal()
+
+    def menu_principal(self):
+        self.nettoyer()
+        ctk.CTkLabel(self, text="L A B Y R I N T H E", font=("Impact", 80), text_color="#00E5FF").place(relx=0.5, rely=0.25, anchor="center")
+        ctk.CTkButton(self, text="CRÉER UNE SALLE", command=self.choisir_terrain_screen, width=300, height=60, font=("Impact", 25)).place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkButton(self, text="REJOINDRE UNE SALLE", command=self.demander_salles, width=300, height=60, font=("Impact", 25)).place(relx=0.5, rely=0.65, anchor="center")
+
+    def choisir_terrain_screen(self):
+        self.nettoyer()
+        ctk.CTkLabel(self, text="CHOISIS TON TERRAIN", font=("Impact", 35)).pack(pady=30)
+        terrains = [("Donjon de Glace", "glace.jpg"), ("Forêt Maudite", "foret.jpeg"), ("Labyrinthe de Feu", "feu.jpg")]
+        f = ctk.CTkFrame(self, fg_color="transparent")
+        f.pack()
+        for i, (nom, img_p) in enumerate(terrains):
+            try: img = ctk.CTkImage(Image.open(f"image/{img_p}"), size=(250, 150))
+            except: img = None
+            ctk.CTkButton(f, text=nom, image=img, compound="top", command=lambda n=nom: self.creer_salle(n)).grid(row=0, column=i, padx=10)
+
+    def demander_salles(self):
+        if self.connecter():
+            self.client_socket.send(json.dumps({"type": "get_salles"}).encode())
+
+    def afficher_liste_salles(self, salles):
+        self.nettoyer()
+        ctk.CTkLabel(self, text="SALLES OUVERTES", font=("Impact", 35)).pack(pady=30)
+        if not salles:
+            ctk.CTkLabel(self, text="Aucune salle active...", font=("Arial", 20)).pack()
+            ctk.CTkButton(self, text="Retour", command=self.menu_principal).pack(pady=20)
+            return
+        for s in salles:
+            btn = ctk.CTkButton(self, text=f"Hôte: {s['nom']} | {s['terrain']}", width=400, height=50, command=lambda n=s['nom']: self.rejoindre(n))
+            btn.pack(pady=10)
+
+    def creer_salle(self, terrain):
+        if self.connecter():
+            self.client_socket.send(json.dumps({"type": "creer_salle", "avatar": self.avatar_choisi, "terrain": terrain}).encode())
+            self.attente_ecran()
+
+    def rejoindre(self, nom_salle):
+        self.client_socket.send(json.dumps({"type": "rejoindre_salle", "salle": nom_salle, "avatar": self.avatar_choisi}).encode())
+        self.attente_ecran()
+
+    def attente_ecran(self):
+        self.nettoyer()
+        self.label_attente = ctk.CTkLabel(self, text="Attente des joueurs...", font=("Impact", 30))
+        self.label_attente.pack(pady=100)
+        ctk.CTkButton(self, text="LANCER LE JEU", command=lambda: self.client_socket.send(json.dumps({"type":"lancer_jeu"}).encode())).pack()
+    def interface_jeu(self, data):
+            self.nettoyer()
+            self.current_map = data["map"]
+            self.ma_salle = data["ma_salle"]
+            
+            # --- AJOUT ICI : Création du label pour les mouvements ---
+            self.stat_lab = ctk.CTkLabel(self, text="MOUVEMENTS : 0", font=("Impact", 25), text_color="#00E5FF")
+            self.stat_lab.pack(pady=10)
+
+            self.bind("<Up>", lambda e: self.move("up"))
+            self.bind("<Down>", lambda e: self.move("down"))
+            self.bind("<Left>", lambda e: self.move("left"))
+            self.bind("<Right>", lambda e: self.move("right"))
+
+            self.can = ctk.CTkCanvas(self, width=800, height=500, bg="black", highlightthickness=2, highlightbackground="#00E5FF")
+            self.can.pack(pady=20)
+            
+            ctrl = ctk.CTkFrame(self, fg_color="transparent")
+            ctrl.pack()
+
+    def move(self, d):
+        self.client_socket.send(json.dumps({"type":"move", "dir":d, "salle":self.ma_salle}).encode())
+        self.points_mouvement = random.randint(1,6)
+        self.stat_lab.configure(text=f"MOUVEMENTS : {self.points_mouvement}")
+    def afficher_winner(self, message):
+            if hasattr(self, 'stat_lab'):
+                self.stat_lab.configure(text=message, text_color="#FFD700")
+    def dessiner_plateau(self, etat):
+        self.can.delete("all")
+        rows, cols = len(self.current_map), len(self.current_map[0])
+        cs = min(1000 // cols, 1000 // rows)
+        ma_pos = etat[self.mon_id]["pos"]
+        
+        for r in range(rows):
+            for c in range(cols):
+                dist = abs(ma_pos[0]-r) + abs(ma_pos[1]-c)
+                if dist <= 2:
+                    x, y = c*cs, r*cs
+                    v = self.current_map[r][c]
+
+                    # Choisir la couleur AVANT de dessiner
+                    if v == 1:      # mur
+                        color = "#222"
+                    elif v == 0:    # sol libre
+                        color = "#050505"
+                    elif v == 2:    # drapeau
+                        color = "grey"
+                    elif v == 3:    # bombe
+                        color = "red"   # 🔴 toute la case rouge
+                    elif v == 4:    # lave
+                        color = "orange"
+                    elif v == 5:    # ronces
+                        color = "darkgreen"
+                    elif v == 6:    # ronces
+                        color = "#140777"
+                    elif v == 7:    # ronces
+                        color = "#009407"
+                    elif v == 8:    # ronces
+                        color = "#340295"
+                    else:
+                        color = "#050505"
+
+                    # Dessiner le rectangle avec la couleur choisie
+                    self.can.create_rectangle(x, y, x+cs, y+cs, fill=color, outline="#111")
+
+                    # Ajouter éventuellement un symbole par-dessus
+                    if v == 2:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🏁")
+                    elif v == 3:
+                        self.can.create_text(x+cs/2, y+cs/2, text="💣")
+                    elif v == 4:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🔥")
+                    elif v == 5:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🌵")
+                    elif v == 6:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🥶")
+                    elif v == 7:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🌲")
+                    elif v == 8:
+                        self.can.create_text(x+cs/2, y+cs/2, text="🌀")
+        # Dessiner les avatars des joueurs
+        for info in etat.values():
+            y, x = info["pos"]
+            self.can.create_text(x*cs+cs/2, y*cs+cs/2, text=info["avatar"], font=("Arial", int(cs*0.4)))
+
 
 if __name__ == "__main__":
     app = LabyrintheApp()

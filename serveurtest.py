@@ -9,19 +9,20 @@ class LabyServeur:
         self.salles = {}
         # Carte de base (petit exemple, tu peux mettre ta grande map ici)
         self.MAP_BASE = [
-            [1]*20,
-            [1,0,0,0,1,0,0,0,0,1, 1,0,1,0,1,0,0,0,0,1],
-            [1,0,1,0,1,0,1,1,0,1, 1,0,1,0,0,0,1,1,0,1],
-            [1,0,1,1,1,0,1,0,0,1, 1,0,1,1,1,0,1,0,0,1],
-            [1,0,0,1,1,1,5,0,1,1, 1,0,0,3,0,0,0,0,3,1],
-            [1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1],
-            [1,3,0,0,1,0,0,0,0,1, 1,5,0,0,0,0,0,0,0,1],
-            [1,0,1,1,1,0,1,1,0,1, 1,0,1,1,1,0,1,1,0,1],
-            [1,0,0,1,0,0,0,0,0,1, 1,0,0,1,0,0,0,0,0,1],
-            [1,3,1,0,1,0,1,0,1,1, 1,0,1,0,1,0,1,0,1,1],
-            [1,0,0,3,0,0,0,0,1,1, 1,3,0,0,0,0,0,0,2,1],
-            [1]*20
+            [1]*20, # Bordure haute
+            [1, 0, 7, 0, 1, 8, 0, 0, 0, 1, 0, 0, 0, 7, 0, 0, 3, 0, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 5, 1, 0, 1, 0, 0, 0, 0, 0, 0, 5, 0, 0, 1],
+            [1, 0, 1, 1, 1, 3, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1],
+            [1, 8, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 5, 0, 1, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 0, 0, 3, 0, 0, 0, 0, 8, 0, 0, 1, 1, 1, 1, 0, 1],
+            [1, 7, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 3, 1, 0, 1],
+            [1, 0, 0, 0, 3, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1],
+            [1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 5, 0, 1, 0, 0, 0, 1],
+            [1, 8, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 7, 0, 0, 1, 3, 0, 2, 1],
+            [1]*20  # Bordure basse
         ]
+
         self.MAP_FORET = [
             [1]*20,
             [1,0,0,0,1,0,0,0,0,1, 1,0,0,0,1,0,0,0,0,1],
@@ -37,7 +38,6 @@ class LabyServeur:
             [1,0,0,0,0,0,0,0,2,1, 1,0,0,4,0,0,0,0,4,1], # 4 = lave
             [1]*20
         ]
-
 
 
     def broadcast(self, nom_salle, message):
@@ -120,54 +120,34 @@ class LabyServeur:
                                 salle["etat"][j_id]["pos"] = [1, 1]
 
                             # Drapeau
+# --- BLOC VICTOIRE CORRIGÉ ---
                             elif salle["map"][y][x] == 2:
-                                salle["etat"][j_id]["status"] = "winner"
                                 if j_id not in salle["winners"]:
                                     salle["winners"].append(j_id)
 
-                                # Bloquer le joueur (il ne bouge plus)
+                                # Bloquer le joueur sur la case
                                 salle["etat"][j_id]["pos"] = [y, x]
 
-                                # Envoyer uniquement au joueur gagnant
-                                conn.send(json.dumps({
-                                    "type": "winner_message",
-                                    "message": f"{salle['etat'][j_id]['avatar']} a atteint le drapeau !"
-                                }).encode())
+                                # 1. Calcul du classement (Proximité)
+                                drapeau_pos = [y, x]
+                                autres = [pid for pid in salle["etat"] if pid not in salle["winners"]]
+                                
+                                classement_restant = sorted(
+                                    autres,
+                                    key=lambda pid: abs(salle["etat"][pid]["pos"][0] - drapeau_pos[0]) +
+                                                    abs(salle["etat"][pid]["pos"][1] - drapeau_pos[1])
+                                )
 
-                                # Vérifier condition de fin
-                                total_joueurs = len(salle["etat"])
+                                # 2. Convertir les IDs en AVATARS pour le client
+                                final_ids = salle["winners"] + classement_restant
+                                final_avatars = [salle["etat"][pid]["avatar"] for pid in final_ids]
 
-                                # Cas 1 : moins de 3 joueurs → fin immédiate
-                                if total_joueurs > 3:
-                                    drapeau_pos = [y, x]
-                                    autres = [pid for pid in salle["etat"] if pid not in salle["winners"]]
-                                    classement = sorted(
-                                        autres,
-                                        key=lambda pid: abs(salle["etat"][pid]["pos"][0]-drapeau_pos[0]) +
-                                                        abs(salle["etat"][pid]["pos"][1]-drapeau_pos[1])
-                                    )
-                                    final_winners = salle["winners"] + classement
+                                # 3. Envoyer le signal de fin avec les avatars
+                                self.broadcast(target_salle, {
+                                    "type": "end_game",
+                                    "winners": final_avatars
+                                })
 
-                                    self.broadcast(target_salle, {
-                                        "type": "end_game",
-                                        "winners": final_winners
-                                    })
-
-                                # Cas 2 : 3 joueurs ou plus → attendre 3 gagnants
-                                elif len(salle["winners"]) >= 3:
-                                    drapeau_pos = [y, x]
-                                    autres = [pid for pid in salle["etat"] if pid not in salle["winners"]]
-                                    classement = sorted(
-                                        autres,
-                                        key=lambda pid: abs(salle["etat"][pid]["pos"][0]-drapeau_pos[0]) +
-                                                        abs(salle["etat"][pid]["pos"][1]-drapeau_pos[1])
-                                    )
-                                    final_winners = salle["winners"] + classement
-
-                                    self.broadcast(target_salle, {
-                                        "type": "end_game",
-                                        "winners": final_winners
-                                    })
 
 
 
