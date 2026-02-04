@@ -3,6 +3,16 @@ from PIL import Image
 import socket, threading, json, os, random, pygame
 
 class LabyrintheApp(ctk.CTk):
+    def discover_server():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind(("", 37020))  # écouter sur le port de découverte
+        data, addr = s.recvfrom(1024)
+        msg = data.decode()
+        if msg.startswith("LABY_SERVER"):
+            port = int(msg.split(":")[1])
+            return addr[0], port
+        return None, None
+
     def __init__(self):
         super().__init__()
         self.geometry("1000x850")
@@ -61,14 +71,20 @@ class LabyrintheApp(ctk.CTk):
     def connecter(self):
         if not self.client_socket:
             try:
+                host, port = discover_server()
+                if not host:
+                    print("[ERREUR] Aucun serveur trouvé sur le réseau.")
+                    return False
                 self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.client_socket.connect(('127.0.0.1', 5555))
+                self.client_socket.connect((host, port))
                 self.mon_id = f"J_{self.client_socket.getsockname()[1]}"
                 threading.Thread(target=self.ecouter, daemon=True).start()
                 return True
-            except: return False
+            except Exception as e:
+                print("[ERREUR] Connexion impossible :", e)
+                return False
         return True
-    
+
     def ecouter(self):
             while True:
                 try:
@@ -203,7 +219,7 @@ class LabyrintheApp(ctk.CTk):
             self.bind("<Left>", lambda e: self.move("left"))
             self.bind("<Right>", lambda e: self.move("right"))
 
-            self.can = ctk.CTkCanvas(self, width=800, height=500, bg="black", highlightthickness=2, highlightbackground="#00E5FF")
+            self.can = ctk.CTkCanvas(self, width=1000, height=900, bg="black", highlightthickness=2, highlightbackground="#00E5FF")
             self.can.pack(pady=20)
             
             ctrl = ctk.CTkFrame(self, fg_color="transparent")

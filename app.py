@@ -203,7 +203,7 @@ class LabyrintheApp(ctk.CTk):
             self.bind("<Left>", lambda e: self.move("left"))
             self.bind("<Right>", lambda e: self.move("right"))
 
-            self.can = ctk.CTkCanvas(self, width=800, height=500, bg="black", highlightthickness=2, highlightbackground="#00E5FF")
+            self.can = ctk.CTkCanvas(self, width=1000, height=900, bg="black", highlightthickness=2, highlightbackground="#00E5FF")
             self.can.pack(pady=20)
             
             ctrl = ctk.CTkFrame(self, fg_color="transparent")

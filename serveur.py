@@ -1,4 +1,5 @@
 import socket, threading, json
+import time, os
 
 class LabyServeur:
     def __init__(self):
@@ -9,36 +10,111 @@ class LabyServeur:
         self.salles = {}
         # Carte de base (petit exemple, tu peux mettre ta grande map ici)
         self.MAP_BASE = [
-            [1]*20, # Bordure haute
+            [1]*20,  # Bordure haute
             [1, 0, 7, 0, 1, 8, 0, 0, 0, 1, 0, 0, 0, 7, 0, 0, 3, 0, 0, 1],
             [1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
             [1, 0, 1, 0, 0, 0, 5, 1, 0, 1, 0, 0, 0, 0, 0, 0, 5, 0, 0, 1],
             [1, 0, 1, 1, 1, 3, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1],
             [1, 8, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 5, 0, 1, 0, 0, 0, 0, 1],
-            [1, 1, 1, 0, 0, 0, 3, 0, 0, 0, 0, 8, 0, 0, 1, 1, 1, 1, 0, 1],
-            [1, 7, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 3, 1, 0, 1],
+            [1, 1, 0, 0, 0, 0, 3, 0, 0, 0, 0, 8, 0, 0, 1, 1, 1, 1, 0, 1],
+            [1, 7, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 3, 1, 0, 1],
             [1, 0, 0, 0, 3, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1],
-            [1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 5, 0, 1, 0, 0, 0, 1],
+            [1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 5, 0, 1, 0, 0, 0, 1],
             [1, 8, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 7, 0, 0, 1, 3, 0, 2, 1],
+            [1, 0, 0, 1, 1, 1, 0, 7, 0, 1, 0, 0, 0, 1, 0, 5, 0, 1, 0, 1],
+            [1, 0, 5, 0, 0, 0, 0, 1, 0, 1, 8, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+            [1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 7, 0, 0, 0, 1, 0, 0, 8, 0, 0, 0, 5, 0, 0, 0, 1],
             [1]*20  # Bordure basse
         ]
 
         self.MAP_FORET = [
-            [1]*20,
-            [1,0,0,0,1,0,0,0,0,1, 1,0,0,0,1,0,0,0,0,1],
-            [1,0,1,0,0,0,1,1,0,1, 1,0,1,0,0,0,1,1,0,1],
-            [1,0,0,5,0,0,0,0,2,1, 1,0,0,3,0,0,0,0,3,1],
-            [1]*20
+            [1]*20,  # Bordure haute
+            [1,0,7,0,1,8,0,0,0,1,0,0,0,7,0,0,3,0,0,1],
+            [1,0,1,0,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,5,1,0,1,0,0,0,0,0,0,5,0,0,1],
+            [1,0,1,1,1,3,0,1,0,0,0,1,1,1,1,0,1,1,1,1],
+            [1,8,0,0,1,1,1,1,1,1,1,1,5,0,1,0,0,0,0,1],
+            [1,1,0,0,0,0,3,0,0,0,0,8,0,0,1,1,1,1,0,1],
+            [1,7,0,1,1,1,1,1,0,1,1,1,1,0,0,0,3,1,0,1],
+            [1,0,0,0,3,0,0,1,0,1,0,0,0,1,1,1,0,1,0,1],
+            [1,1,0,1,0,1,0,1,0,1,0,1,0,5,0,1,0,0,0,1],
+            [1,8,0,0,0,1,0,0,0,0,0,1,7,0,0,1,3,0,6,1],
+            [1,0,0,1,1,1,0,7,0,1,0,0,0,1,0,5,0,1,0,1],
+            [1,0,5,0,0,0,0,1,0,1,8,0,0,1,0,0,0,1,0,1],
+            [1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+            [1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,0,0,0,5,0,0,0,0,0,3,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,7,0,0,0,1,0,0,8,0,0,0,5,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],  # Sortie 🏁 cachée
+            [1]*20  # Bordure basse
         ]
 
         self.MAP_FEU = [
-            [1]*20,
-            [1,0,0,0,1,0,0,0,0,1, 1,0,0,0,1,0,0,0,0,1],
-            [1,0,1,0,0,0,1,1,0,1, 1,0,1,0,0,0,1,1,0,1],
-            [1,0,0,0,0,0,0,0,2,1, 1,0,0,4,0,0,0,0,4,1], # 4 = lave
-            [1]*20
+            [1]*20,  # Bordure haute
+            [1,0,4,0,1,4,0,0,0,1,0,0,0,4,0,0,3,0,0,1],
+            [1,0,1,0,1,1,1,4,0,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,4,1,0,1,0,0,0,0,0,0,4,0,0,1],
+            [1,0,1,1,1,4,0,1,0,0,0,1,1,1,1,0,1,1,1,1],
+            [1,4,0,0,1,1,1,1,1,1,1,1,4,0,1,0,0,0,0,1],
+            [1,1,0,0,0,0,4,0,0,0,0,4,0,0,1,1,1,1,0,1],
+            [1,4,0,1,1,1,1,1,0,1,1,1,1,0,0,0,4,1,0,1],
+            [1,0,0,0,4,0,0,1,0,1,0,0,0,1,1,1,0,1,0,1],
+            [1,1,0,1,0,1,0,1,0,1,0,1,0,4,0,1,0,0,0,1],
+            [1,4,0,0,0,1,0,0,0,0,0,1,4,0,0,1,4,0,6,1],
+            [1,0,0,1,1,1,0,4,0,1,0,0,0,1,0,4,0,1,0,1],
+            [1,0,4,0,0,0,0,1,0,1,4,0,0,1,0,0,0,1,0,1],
+            [1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+            [1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,0,0,0,4,0,0,0,0,0,4,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,4,0,0,0,1,0,0,4,0,0,0,4,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1],  # Sortie 🏁 cachée
+            [1]*20  # Bordure basse
         ]
 
+        
+
+    def log_connexion(self, j_id, addr):
+        """Stocke chaque connexion dans un fichier texte."""
+        with open("connexions.log", "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} | {j_id} | {addr}\n")
+
+    def log_victoire(self, j_id, avatar):
+        """Stocke les victoires dans un fichier JSON avec auto-incrément."""
+        import json
+        filename = "victoires.json"
+        # Charger l’existant
+        if os.path.exists(filename):
+            with open(filename, "r", encoding="utf-8") as f:
+                scores = json.load(f)
+        else:
+            scores = {}
+
+        # Incrémenter
+        if j_id in scores:
+            scores[j_id]["count"] += 1
+        else:
+            scores[j_id] = {"avatar": avatar, "count": 1}
+
+        # Sauvegarder
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(scores, f, indent=2, ensure_ascii=False)
+
+    def random_spawn(map_data):
+        import random
+        rows, cols = len(map_data), len(map_data[0])
+        while True:
+            r, c = random.randint(1, rows-2), random.randint(1, cols-2)
+            if map_data[r][c] == 0:  # case libre
+                return [r, c]
 
     def broadcast(self, nom_salle, message):
         """Envoie un message JSON à tous les joueurs d'une salle."""
@@ -51,9 +127,17 @@ class LabyServeur:
                     pass
 
     def handle_client(self, conn, addr):
+        def random_spawn(map_data):
+            import random
+            rows, cols = len(map_data), len(map_data[0])
+            while True:
+                r, c = random.randint(1, rows-2), random.randint(1, cols-2)
+                if map_data[r][c] == 0:  # case libre
+                    return [r, c]
         j_id = f"J_{addr[1]}"
         ma_salle = None
         print(f"[LOG] {j_id} connecté.")
+        self.log_connexion(j_id, addr)
 
         while True:
             try:
@@ -77,25 +161,27 @@ class LabyServeur:
                         map_choice = self.MAP_FORET
                     elif terrain == "Labyrinthe de Feu":
                         map_choice = self.MAP_FEU
-                    else:
+                    elif terrain == "Donjon de Glace":
                         map_choice = self.MAP_BASE
 
                     self.salles[ma_salle] = {
                         "terrain": terrain,
                         "joueurs": [conn],
-                        "etat": {j_id: {"pos": [1, 1], "vies": 3, "avatar": msg["avatar"]}},
+                        "etat": {j_id: {"pos": random_spawn(map_choice), "vies": 3, "avatar": msg["avatar"]}},
+                        # "etat": {j_id: {"pos": [1, 1], "vies": 3, "avatar": msg["avatar"]}},
                         "map": map_choice,
                         "winners": []  # liste des gagnants
                     }
                     self.broadcast(ma_salle, {"type": "update_attente", "joueurs": [msg["avatar"]]})
-
 
                 # --- ROUTE : REJOINDRE SALLE ---
                 elif msg["type"] == "rejoindre_salle":
                     ma_salle = msg["salle"]
                     if ma_salle in self.salles:
                         self.salles[ma_salle]["joueurs"].append(conn)
-                        self.salles[ma_salle]["etat"][j_id] = {"pos": [1, 1], "vies": 3, "avatar": msg["avatar"]}
+                        self.salles[ma_salle]["etat"][j_id] = {"pos": random_spawn(self.salles[ma_salle]["map"]), "vies": 3, "avatar": msg["avatar"]}
+
+                        # self.salles[ma_salle]["etat"][j_id] = {"pos": [1, 1], "vies": 3, "avatar": msg["avatar"]}
                         avatars = [p["avatar"] for p in self.salles[ma_salle]["etat"].values()]
                         self.broadcast(ma_salle, {"type": "update_attente", "joueurs": avatars})
 
@@ -117,7 +203,7 @@ class LabyServeur:
                             # Bombe
                             if salle["map"][y][x] == 3:
                                 salle["etat"][j_id]["vies"] -= 1
-                                salle["etat"][j_id]["pos"] = [1, 1]
+                                salle["etat"][j_id]["pos"] = random_spawn(salle["map"]) 
 
                             # Drapeau
 # --- BLOC VICTOIRE CORRIGÉ ---
@@ -127,6 +213,7 @@ class LabyServeur:
 
                                 # Bloquer le joueur sur la case
                                 salle["etat"][j_id]["pos"] = [y, x]
+                                self.log_victoire(j_id, salle["etat"][j_id]["avatar"])
 
                                 # 1. Calcul du classement (Proximité)
                                 drapeau_pos = [y, x]
