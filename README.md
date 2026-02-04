@@ -11,3 +11,5 @@ PIL : pour la gestion des images il nous a permis de mettre en arriere plan nos 
 
 pour la suite apres avoir intaller ces bibliotheque avec le pip install vous allez maintenant activer l'environnement virtuelle avec la commande : ./active (tacher a etre dans le dossier ./mon_env/Scrip/active) le dossier mon_env est cree avec python3 -m venv mon_env 
 
+de par la suite nous avons ajouter 2 version le clienttest et le serveurtest qui est la version beta du projet ici c'est purement la connexion distant : le serveur utilise le protocole udp pour envoyer sont addresse de facon sequentielle et des que le client recois sont addresse il fait maitenant une connexion three hand shake TCP 
+maintenant nous avons une version possible de lancer dans en local avec app.py et serveur.py qui est la version possible de lancer en local et verifier notre travaille
