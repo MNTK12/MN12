@@ -7,7 +7,7 @@ class LabyrintheApp(ctk.CTk):
         super().__init__()
         self.geometry("1000x850")
         self.title("Labyrinthe Online - Sync Edition")
-        
+        self.ip_serveur = "127.0.0.1"
         self.mon_id = None
         self.avatar_choisi = "👤"
         self.client_socket = None
@@ -57,18 +57,22 @@ class LabyrintheApp(ctk.CTk):
         if self.is_muted: pygame.mixer.music.pause()
         else: pygame.mixer.music.unpause()
         self.mute_btn.configure(image=self.icon_on if not self.is_muted else self.icon_off)
-
     def connecter(self):
-        if not self.client_socket:
-            try:
-                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.client_socket.connect(('127.0.0.1', 5555))
-                self.mon_id = f"J_{self.client_socket.getsockname()[1]}"
-                threading.Thread(target=self.ecouter, daemon=True).start()
-                return True
-            except: return False
-        return True
-    
+            if not self.client_socket:
+                try:
+                    self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    # Utilisation de l'IP saisie par l'utilisateur
+                    self.client_socket.connect((self.ip_serveur, 5555))
+                    
+                    self.mon_id = f"J_{self.client_socket.getsockname()[1]}"
+                    threading.Thread(target=self.ecouter, daemon=True).start()
+                    return True
+                except Exception as e:
+                    print(f"Erreur de connexion à {self.ip_serveur}: {e}")
+                    self.client_socket = None # Reset pour pouvoir réessayer
+                    return False
+            return True
+        
     def ecouter(self):
             while True:
                 try:
@@ -131,14 +135,37 @@ class LabyrintheApp(ctk.CTk):
 
     # --- ÉCRANS ---
     def choisir_avatar_screen(self):
-        self.nettoyer()
-        ctk.CTkLabel(self, text="SÉLECTIONNE TON AVATAR", font=("Impact", 45), text_color="#00E5FF").pack(pady=50)
-        f = ctk.CTkFrame(self, fg_color="transparent")
-        f.pack()
-        avatars = ["🥷", "🤖", "🧙‍♂️", "🧛‍♂️", "🦁", "👻", "🧟", "👽"]
-        for i, e in enumerate(avatars):
-            ctk.CTkButton(f, text=e, width=90, height=90, font=("Arial", 40), command=lambda a=e: self.valider_avatar(a)).grid(row=i//4, column=i%4, padx=10, pady=10)
+            self.nettoyer()
+            ctk.CTkLabel(self, text="CONFIGURATION", font=("Impact", 45), text_color="#00E5FF").pack(pady=30)
+            
+            # --- ZONE IP ---
+            ip_frame = ctk.CTkFrame(self, fg_color="transparent")
+            ip_frame.pack(pady=10)
+            
+            ctk.CTkLabel(ip_frame, text="ADRESSE IP DU SERVEUR :", font=("Arial", 14, "bold")).pack()
+            # Change cette ligne :
+            self.entry_ip = ctk.CTkEntry(ip_frame, placeholder_text="Ex: 192.168.1.15", width=250, justify="center")
+            self.entry_ip.insert(0, "127.0.0.1") # Valeur par défaut
+            self.entry_ip.pack(pady=5)
+            
+            # --- ZONE AVATAR ---
+            ctk.CTkLabel(self, text="CHOISIS TON AVATAR", font=("Arial", 18)).pack(pady=10)
+            f = ctk.CTkFrame(self, fg_color="transparent")
+            f.pack()
+            
+            avatars = ["🥷", "🤖", "🧙‍♂️", "🧛‍♂️", "🦁", "👻", "🧟", "👽"]
+            for i, e in enumerate(avatars):
+                ctk.CTkButton(f, text=e, width=90, height=90, font=("Arial", 40), 
+                            command=lambda a=e: self.valider_config(a)).grid(row=i//4, column=i%4, padx=10, pady=10)
 
+    def valider_config(self, a):
+        # On récupère l'IP du champ avant de changer d'écran
+        ip_saisie = self.entry_ip.get().strip()
+        if ip_saisie:
+            self.ip_serveur = ip_saisie
+        
+        self.avatar_choisi = a
+        self.menu_principal()
     def valider_avatar(self, a):
         self.avatar_choisi = a
         self.menu_principal()
